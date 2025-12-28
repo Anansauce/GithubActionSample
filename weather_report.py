@@ -19,7 +19,8 @@ def get_weather(my_city):
             "http://www.weather.com.cn/textFC/hz.shtml",
             "http://www.weather.com.cn/textFC/hn.shtml",
             "http://www.weather.com.cn/textFC/xb.shtml",
-            "http://www.weather.com.cn/textFC/xn.shtml"
+            "http://www.weather.com.cn/textFC/xn.shtml",
+            "https://www.weather.com.cn/textFC/guangdong.shtml"
             ]
     for url in urls:
         resp = requests.get(url)
