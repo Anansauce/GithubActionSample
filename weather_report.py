@@ -12,6 +12,12 @@ openId = os.environ.get("OPEN_ID")
 # 天气预报模板ID
 weather_template_id = os.environ.get("TEMPLATE_ID")
 
+def _normalize_city_name(name):
+    if not name:
+        return ""
+    # 去掉常见后缀与空白，方便匹配 "广州" 与 "广州市" 等
+    return name.replace("市", "").replace("县", "").replace("区", "").strip()
+
 def get_weather(my_city):
     urls = ["http://www.weather.com.cn/textFC/hb.shtml",
             "http://www.weather.com.cn/textFC/db.shtml",
@@ -22,21 +28,27 @@ def get_weather(my_city):
             "http://www.weather.com.cn/textFC/xn.shtml",
             "https://www.weather.com.cn/textFC/guangdong.shtml"
             ]
+    target = _normalize_city_name(my_city)
     for url in urls:
         resp = requests.get(url)
         text = resp.content.decode("utf-8")
         soup = BeautifulSoup(text, 'html5lib')
         div_conMidtab = soup.find("div", class_="conMidtab")
+        if not div_conMidtab:
+            continue
         tables = div_conMidtab.find_all("table")
         for table in tables:
             trs = table.find_all("tr")[2:]
             for index, tr in enumerate(trs):
                 tds = tr.find_all("td")
                 # 这里倒着数，因为每个省会的td结构跟其他不一样
+                if len(tds) < 8:
+                    continue
                 city_td = tds[-8]
                 this_city = list(city_td.stripped_strings)[0]
-                if this_city == my_city:
-
+                this_norm = _normalize_city_name(this_city)
+                # 使用归一化比较，并允许子串匹配以提高命中率
+                if this_norm == target or target in this_norm or this_norm in target:
                     high_temp_td = tds[-5]
                     low_temp_td = tds[-2]
                     weather_type_day_td = tds[-7]
@@ -49,15 +61,18 @@ def get_weather(my_city):
                     weather_typ_day = list(weather_type_day_td.stripped_strings)[0]
                     weather_type_night = list(weather_type_night_td.stripped_strings)[0]
 
-                    wind_day = list(wind_td_day.stripped_strings)[0] + list(wind_td_day.stripped_strings)[1]
-                    wind_night = list(wind_td_day_night.stripped_strings)[0] + list(wind_td_day_night.stripped_strings)[1]
+                    # 某些风向/级别由两个标签组成
+                    wind_day_parts = list(wind_td_day.stripped_strings)
+                    wind_night_parts = list(wind_td_day_night.stripped_strings)
+                    wind_day = "".join(wind_day_parts) if wind_day_parts else ""
+                    wind_night = "".join(wind_night_parts) if wind_night_parts else ""
 
                     # 如果没有白天的数据就使用夜间的
                     temp = f"{low_temp}——{high_temp}摄氏度" if high_temp != "-" else f"{low_temp}摄氏度"
                     weather_typ = weather_typ_day if weather_typ_day != "-" else weather_type_night
-                    wind = f"{wind_day}" if wind_day != "--" else f"{wind_night}"
+                    wind = f"{wind_day}" if wind_day and wind_day != "--" else f"{wind_night}"
                     return this_city, temp, weather_typ, wind
-
+    return None
 
 def get_access_token():
     # 获取access token的url
@@ -80,6 +95,10 @@ def get_daily_love():
 
 
 def send_weather(access_token, weather):
+    if not weather:
+        print("未获取到天气信息，跳过发送。")
+        return
+
     # touser 就是 openID
     # template_id 就是模板ID
     # url 就是点击模板跳转的url
@@ -131,4 +150,5 @@ def weather_report(this_city):
 
 
 if __name__ == '__main__':
+    # 可以用 "广州" 或 "广州市"，均能匹配
     weather_report("广州")
